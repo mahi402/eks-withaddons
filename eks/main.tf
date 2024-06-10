@@ -34,55 +34,34 @@ module "tags" {
 
 
 ## EKS  Module #####
-module "eks_managed_node_group" {
-  source = "terraform-aws-modules/eks/aws//modules/eks-managed-node-group"
+module "eks" {
+  source          = "terraform-aws-modules/eks/aws"
+  version         = "20.8.4"
+  cluster_name    = local.cluster_name
+  cluster_version = var.kubernetes_version
+  subnet_ids      = module.vpc.private_subnets
 
-  name            = "separate-eks-mng"
-  cluster_name    = "my-cluster"
-  cluster_version = "1.27"
-
-  subnet_ids = ["subnet-abcde012", "subnet-bcde012a", "subnet-fghi345a"]
-
-  // The following variables are necessary if you decide to use the module outside of the parent EKS module context.
-  // Without it, the security groups of the nodes are empty and thus won't join the cluster.
-  cluster_primary_security_group_id = module.eks.cluster_primary_security_group_id
-  vpc_security_group_ids            = [module.eks.node_security_group_id]
-
-  // Note: `disk_size`, and `remote_access` can only be set when using the EKS managed node group default launch template
-  // This module defaults to providing a custom launch template to allow for custom security groups, tag propagation, etc.
-  // use_custom_launch_template = false
-  // disk_size = 50
-  //
-  //  # Remote access cannot be specified with a launch template
-  //  remote_access = {
-  //    ec2_ssh_key               = module.key_pair.key_pair_name
-  //    source_security_group_ids = [aws_security_group.remote_access.id]
-  //  }
-
-  min_size     = 1
-  max_size     = 10
-  desired_size = 1
-
-  instance_types = ["t3.large"]
-  capacity_type  = "SPOT"
-
-  labels = {
-    Environment = "test"
-    GithubRepo  = "terraform-aws-eks"
-    GithubOrg   = "terraform-aws-modules"
-  }
-
-  taints = {
-    dedicated = {
-      key    = "dedicated"
-      value  = "gpuGroup"
-      effect = "NO_SCHEDULE"
-    }
-  }
+  enable_irsa = true
 
   tags = {
-    Environment = "dev"
-    Terraform   = "true"
+    cluster = "demo"
+  }
+
+  vpc_id = module.vpc.vpc_id
+
+  eks_managed_node_group_defaults = {
+    ami_type               = "AL2_x86_64"
+    instance_types         = ["t3.medium"]
+    vpc_security_group_ids = [aws_security_group.all_worker_mgmt.id]
+  }
+
+  eks_managed_node_groups = {
+
+    node_group = {
+      min_size     = 2
+      max_size     = 6
+      desired_size = 2
+    }
   }
 }
 
@@ -133,25 +112,7 @@ module "eks_kubernetes_addons" {
   enable_aws_for_fluentbit                 = var.enable_aws_for_fluentbit
   aws_for_fluentbit_cw_log_group_retention = 30
 
-  aws_for_fluentbit_helm_config = {
-    name             = "aws-for-fluent-bit"
-    chart            = "aws-for-fluent-bit"
-    version          = "0.1.18"
-    namespace        = "logging"
-    create_namespace = true
-    values = [templatefile("${path.module}/helm_values/aws-for-fluentbit-values.yaml", {
-      region                                     = var.aws_region
-      aws_for_fluent_bit_cw_log_group            = "/${module.eks.cluster_id}/application-logs"
-      aws_for_fluentbit_cw_log_group_kms_key_arn = var.aws_kms_key_arn
-      cluster_name                               = module.eks.cluster_id
-    })]
-    set = [
-      {
-        name  = "nodeSelector.kubernetes\\.io/os"
-        value = "linux"
-      }
-    ]
-  }
+  
 
   enable_prisma_twistlock_defender = var.enable_prisma_twistlock_defender
   enable_cluster_autoscaler        = var.enable_cluster_autoscaler
