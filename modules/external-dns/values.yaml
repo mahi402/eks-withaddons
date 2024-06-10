@@ -1,0 +1,8 @@
+provider: aws
+txtOwnerId: "Z08389243G1Q2O35V7GIP"
+txtPrefix: ${cluster_name}
+aws:
+  region: ${aws_region}
+  preferCNAME: true
+  zoneType: "public"
+  assumeRoleArn: ${external_dns_role}

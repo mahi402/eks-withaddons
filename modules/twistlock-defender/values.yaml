@@ -1,0 +1,2 @@
+ClusterName: ${cluster_id}
+Namespace: "twistlock"

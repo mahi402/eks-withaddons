@@ -1,0 +1,4 @@
+apiVersion: v2
+name: fargate-insights
+version: 0.0.4
+appVersion: 0.0.1
