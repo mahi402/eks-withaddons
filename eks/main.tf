@@ -34,24 +34,56 @@ module "tags" {
 
 
 ## EKS  Module #####
-module "eks" {
+module "eks_managed_node_group" {
+  source = "terraform-aws-modules/eks/aws//modules/eks-managed-node-group"
 
-  source                          = "../../modules/eks-nodegroup"
-  cluster_name                    = var.cluster_name
-  role_service                    = var.role_service
-  node_groups                     = var.node_groups
-  aws_kms_key_arn                 = var.aws_kms_key_arn
-  parameter_subnet_id1_name       = var.parameter_subnet_id1_name
-  parameter_subnet_id2_name       = var.parameter_subnet_id2_name
-  parameter_subnet_id3_name       = var.parameter_subnet_id3_name
-  parameter_vpc_id_name           = var.parameter_vpc_id_name
-  role_service_managed            = var.role_service_managed
-  root_block_size                 = var.root_block_size
-  kube_proxy                      = var.kube_proxy
-  vpcni                           = var.vpcni
-  k8s-version                     = var.k8s-version
-  cluster_endpoint_private_access = var.cluster_endpoint_private_access
-  tags                            = module.tags.tags
+  name            = "separate-eks-mng"
+  cluster_name    = "my-cluster"
+  cluster_version = "1.27"
+
+  subnet_ids = ["subnet-abcde012", "subnet-bcde012a", "subnet-fghi345a"]
+
+  // The following variables are necessary if you decide to use the module outside of the parent EKS module context.
+  // Without it, the security groups of the nodes are empty and thus won't join the cluster.
+  cluster_primary_security_group_id = module.eks.cluster_primary_security_group_id
+  vpc_security_group_ids            = [module.eks.node_security_group_id]
+
+  // Note: `disk_size`, and `remote_access` can only be set when using the EKS managed node group default launch template
+  // This module defaults to providing a custom launch template to allow for custom security groups, tag propagation, etc.
+  // use_custom_launch_template = false
+  // disk_size = 50
+  //
+  //  # Remote access cannot be specified with a launch template
+  //  remote_access = {
+  //    ec2_ssh_key               = module.key_pair.key_pair_name
+  //    source_security_group_ids = [aws_security_group.remote_access.id]
+  //  }
+
+  min_size     = 1
+  max_size     = 10
+  desired_size = 1
+
+  instance_types = ["t3.large"]
+  capacity_type  = "SPOT"
+
+  labels = {
+    Environment = "test"
+    GithubRepo  = "terraform-aws-eks"
+    GithubOrg   = "terraform-aws-modules"
+  }
+
+  taints = {
+    dedicated = {
+      key    = "dedicated"
+      value  = "gpuGroup"
+      effect = "NO_SCHEDULE"
+    }
+  }
+
+  tags = {
+    Environment = "dev"
+    Terraform   = "true"
+  }
 }
 
  
@@ -143,109 +175,53 @@ module "eks_kubernetes_addons" {
 
 }
 
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws//modules/aws-auth"
+  version = "~> 20.0"
 
-module "aws_eks_rbac" {
-  depends_on           = [module.eks]
-  source               = "../../modules/rbac"
-  eks_cluster_id       = module.eks.cluster_id
-  eks_cluster_endpoint = module.eks.cluster_endpoint
-  eks_oidc_provider    = module.eks.oidc_provider
-  fargate_type         = var.fargate_type
-  #  managed_role_group_iam = var.role_name_managed
-  managed_node_groups                = var.managed_node_groups
-  application_team_role              = var.application_team_role
-  readonly_roles                     = var.readonly_roles
-  cluster_certificate_authority_data = module.eks.cluster_certificate_authority_data
-  create_aws_auth_configmap          = var.create_aws_auth_configmap
-  tags                               = module.tags.tags
-  map_roles = [
-    {
-      rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/CloudAdmin"
-      username = "Cloudadmin"
-      groups   = ["system:masters"]
-    }
-  ]
-  map_users = [
-    {
-      userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/mahender.tirumala@tekyantra.com"
-      username = "mahender.tirumala@tekyantra.com"
-      groups   = ["system:masters"]
+  manage_aws_auth_configmap = true
 
-    },
+  aws_auth_roles = [
     {
-      userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/shoban.ch@tekyantra.com"
-      username = "shoban.ch@tekyantra.com"
+      rolearn  = "arn:aws:iam::66666666666:role/role1"
+      username = "role1"
       groups   = ["system:masters"]
     },
-    {
-      userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/suresh.banyala@tekyantra.com"
-      username = "suresh.banyala@tekyantra.com"
-      groups   = ["system:masters"]
-    },
-    {
-      userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/chiranjeevi.gajjeli@tekyantra.com"
-      username = "chiranjeevi.gajjeli@tekyantra.com"
-      groups   = ["system:masters"]
-    }
   ]
 
+  aws_auth_users = [
+    {
+      userarn  = "arn:aws:iam::66666666666:user/user1"
+      username = "user1"
+      groups   = ["system:masters"]
+    },
+    {
+      userarn  = "arn:aws:iam::66666666666:user/user2"
+      username = "user2"
+      groups   = ["system:masters"]
+    },
+  ]
 
-  platform_teams = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${join("-", [module.eks.cluster_id, "codebuild"])}"]
-
-
-  application_teams = {
-    team-alpha = {
-      "labels" = {
-        "appName"     = "alpha-team-app",
-        "projectName" = "project-alpha",
-        "environment" = "example",
-        "domain"      = "example",
-        "uuid"        = "example",
-        "billingCode" = "example",
-        "branch"      = "example"
-      }
-      "quota" = {
-        "requests.cpu"    = "1000m",
-        "requests.memory" = "4Gi",
-        "limits.cpu"      = "2000m",
-        "limits.memory"   = "8Gi",
-        "pods"            = "10",
-        "secrets"         = "10",
-        "services"        = "10"
-      }
-
-
-      manifests_dir = "./manifests-team-alpha"
-      users         = [data.aws_caller_identity.current.arn, "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.application_team_role}"]
-    }
-
-    team-beta = {
-      "labels" = {
-        "appName"     = "beta-team-app",
-        "projectName" = "project-beta",
-      }
-      "quota" = {
-        "requests.cpu"    = "2000m",
-        "requests.memory" = "4Gi",
-        "limits.cpu"      = "4000m",
-        "limits.memory"   = "16Gi",
-        "pods"            = "20",
-        "secrets"         = "20",
-        "services"        = "20"
-      }
-
-      manifests_dir = "./manifests-team-beta"
-      users         = [data.aws_caller_identity.current.arn, "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.application_team_role}"]
-    }
-
-  }
+  aws_auth_accounts = [
+    "777777777777",
+    "888888888888",
+  ]
 }
 
-module "codebuild_iam_role_eks" {
-  depends_on       = [module.eks]
-  count            = var.create_codebuild_iam_role_eks ? 1 : 0
-  source           = "../../modules/codebuild-iam-role"
-  eks_cluster_id   = module.eks.cluster_id
-  tags             = module.tags.tags
-  policy_file_name = var.policy_file_name
+
+module "fargate_profile" {
+  source = "terraform-aws-modules/eks/aws//modules/fargate-profile"
+
+  name         = "separate-fargate-profile"
+  cluster_name = "my-cluster"
+
+  subnet_ids = ["subnet-abcde012", "subnet-bcde012a", "subnet-fghi345a"]
+  selectors = [{
+    namespace = "kube-system"
+  }]
+
+  tags = {
+    Environment = "dev"
+    Terraform   = "true"
+  }
 }
