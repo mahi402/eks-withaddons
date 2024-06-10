@@ -3,7 +3,7 @@
  * Terraform usage example which creates eks fargate profile in AWS
 */
 # Filename     : eks-modules/aws/modules/eks/examples/eks-fargate/main.tf
-#  Author      : TekYantra
+#  Author      : Trianz
 #  Description : The terraform module creates eks fargate profile.
 
 locals {

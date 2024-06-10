@@ -4,7 +4,7 @@
 */
 # Filename     : eks-modules/aws/modules/eks/examples/eks-nodegroups/main.tf
 #  Date        : 26 May 2022
-#  Author      : TekYantra
+#  Author      : Trianz
 #  Description : eks-node group creation
 
 #### Cluster Locals ########
