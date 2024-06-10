@@ -106,18 +106,6 @@ module "eks_kubernetes_addons" {
   #addons 
   enable_aws_load_balancer_controller = var.enable_aws_load_balancer_controller
   enable_coredns_autoscaler           = var.enable_coredns_autoscaler
-  coredns_autoscaler_helm_config = {
-    name      = "cluster-proportional-autoscaler"
-    chart     = "cluster-proportional-autoscaler"
-    version   = "1.0.0"
-    namespace = "kube-system"
-    timeout   = "300"
-    values = [templatefile("${path.module}/helm_values/coredns-autoscaler-values.yaml", {
-      operating_system = "linux"
-      target           = "deployment/coredns"
-    })]
-    description = "Cluster Proportional Autoscaler for CoreDNS Service"
-  }
   aws_kms_key_arn               = var.aws_kms_key_arn
   enable_aws_cloudwatch_metrics = var.enable_aws_cloudwatch_metrics
   create_eks_dashboard          = var.create_eks_dashboard
